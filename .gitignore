@@ -2,9 +2,9 @@
 stimuli
 data
 sourcedata
-embeddings*
+embeddings/
 staging*
-encoding*
+encoding/
 aligned*
 logs
 mats
