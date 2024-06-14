@@ -1,3 +1,4 @@
+from os import makedirs
 import h5py
 import nibabel as nib
 import numpy as np

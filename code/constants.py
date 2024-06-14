@@ -9,7 +9,9 @@ NARRATIVE_SLICE = {
     "forgot": slice(8, -8),
 }
 
-# 1200 TR, 5 folds, 240 TRs, 960 Tb
+
+# PUNCTUATION = "!\"#$%&'()*+,-./:;<=>?@\\^_`{|}~"  # string.punctuation without [ ]
+PUNCTUATION = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 
 
 CONFOUND_REGRESSORS = [
@@ -37,7 +39,6 @@ CONFOUND_REGRESSORS = [
     "rot_z",
 ]
 
-# ls -1 data/derivatives/fmriprep/sub-*/func/*task-black_space-fsaverage6_hemi-L.func.gii | cut -d'/' -f4
 SUBS = {
     "black": [
         127,
@@ -136,3 +137,45 @@ SUBS = {
         315,
     ],
 }
+
+ARPABET_PHONES = [
+    "B",
+    "CH",
+    "D",
+    "DH",
+    "F",
+    "G",
+    "HH",
+    "JH",
+    "K",
+    "L",
+    "M",
+    "N",
+    "NG",
+    "P",
+    "R",
+    "S",
+    "SH",
+    "T",
+    "TH",
+    "V",
+    "W",
+    "Y",
+    "Z",
+    "ZH",
+    "AA",
+    "AE",
+    "AH",
+    "AO",
+    "AW",
+    "AY",
+    "EH",
+    "ER",
+    "EY",
+    "IH",
+    "IY",
+    "OW",
+    "OY",
+    "UH",
+    "UW",
+]

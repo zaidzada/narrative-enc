@@ -3,6 +3,8 @@ stimuli
 data
 sourcedata
 embeddings/
+derivatives
+features
 staging*
 encoding/
 aligned*

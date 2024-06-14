@@ -6,7 +6,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import torch
-from constants import CONFOUND_REGRESSORS, NARRATIVE_SLICE, SUBS, TR, TRS
+from constants import SUBS, TR, TRS
 from himalaya.backend import set_backend
 from himalaya.kernel_ridge import ColumnKernelizer, Kernelizer, MultipleKernelRidgeCV
 from himalaya.scoring import correlation_score_split
@@ -14,39 +14,15 @@ from sklearn.model_selection import KFold
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
-from util import subject
+from util.atlas import Atlas
 from util.path import Path
 from voxelwise_tutorials.delayer import Delayer
 
-# def get_spectral_features():
-#     raise NotImplementedError
-#     from transformers import AutoFeatureExtractor
-#     from whisperx import load_audio
 
-#     SAMPLING_RATE = 16000.0
+def get_nuisance_regressors(narrative: str):
 
-#     feature_extractor = AutoFeatureExtractor.from_pretrained("openai/whisper-tiny")
-
-#     audiopath = "mats/black_audio.wav"
-#     audio = load_audio(audiopath)  # exactly 800 s
-#     n_chunks = np.ceil(audio.size / (30 * SAMPLING_RATE))  # 30 s each
-#     chunks = np.array_split(audio, n_chunks)
-#     features = feature_extractor(chunks, sampling_rate=SAMPLING_RATE)
-#     features = np.hstack(features["input_features"])
-
-#     chunks = np.array_split(features, TRS, axis=1)
-#     features = np.hstack([c.mean(axis=1, keepdims=True) for c in chunks])
-#     features = features.T
-
-#     return features
-
-
-def get_transcript_features(narrative: str):
-
-    filename = f"data/stimuli/gentle/{narrative}/align.csv"
-    df = pd.read_csv(filename, names=["word", "lemma", "onset", "offset"])
-    df["onset"] = df["onset"].ffill()
-    df["TR"] = df.onset.divide(TR[narrative]).apply(np.floor).apply(int)
+    filename = f"data/stimuli/whisperx/narrative-{narrative}.csv"
+    df = pd.read_csv(filename, index_col=0)
 
     word_onsets = np.zeros(TRS[narrative], dtype=np.float32)
     word_rates = np.zeros(TRS[narrative], dtype=np.float32)
@@ -59,12 +35,32 @@ def get_transcript_features(narrative: str):
     return word_onsets, word_rates
 
 
-def get_llm_embs(narrative: str, modelname: str):
-    filename = f"features/{modelname}/desc-{narrative}.h5"
-    df = pd.read_hdf(filename, key="df")
+def _get_llm_embs(narrative: str, modelname: str, layer: int):
+
+    filename = f"data/features/{modelname}/narrative-{narrative}.pkl"
+    df = pd.read_pickle(filename)
     df["start"] = df["start"].ffill()
     df["TR"] = df["start"].divide(TR[narrative]).apply(np.floor).apply(int)
 
+    filename = f"data/features/{modelname}/narrative-{narrative}.h5"
+    with h5py.File(filename, "r") as f:
+        states = f["activations"][layer + 1]
+    df["embedding"] = [e for e in states]
+
+    n_features = df.iloc[0].embedding.size
+    embeddings = np.zeros((TRS[narrative], n_features), dtype=np.float32)
+    for tr in range(TRS[narrative]):
+        subdf = df[df.TR == tr]
+        if len(subdf):
+            embeddings[tr] = subdf.embedding.mean(0)
+
+    return embeddings
+
+
+def _get_pickle_feature(feature_name: str, narrative: str):
+    filename = f"data/features/{feature_name}/narrative-{narrative}.pkl"
+    df = pd.read_pickle(filename)
+    df["TR"] = df["start"].divide(TR[narrative]).apply(np.floor).apply(int)
     n_features = df.iloc[0].embedding.size
 
     embeddings = np.zeros((TRS[narrative], n_features), dtype=np.float32)
@@ -76,43 +72,41 @@ def get_llm_embs(narrative: str, modelname: str):
     return embeddings
 
 
-def get_bold(sub: int, narrative: str) -> np.ndarray:
+def get_feature(feature_name: str, narrative: str, **kwargs):
+    if feature_name == "acoustic":
+        return np.load(f"data/features/spectrogram/narrative-{narrative}.npy")
+    elif feature_name == "articulatory":
+        return _get_pickle_feature(feature_name, narrative)
+    elif feature_name == "syntactic":
+        return _get_pickle_feature(feature_name, narrative)
+    elif feature_name == "nuisance":
+        return get_nuisance_regressors(narrative)
+    else:
+        return _get_llm_embs(narrative, modelname=feature_name, **kwargs)
+
+
+def get_bold(sub_id: int, narrative: str) -> np.ndarray:
     boldpath = Path(
-        root="data/derivatives/fmriprep/",
+        root="data/derivatives/clean/",
         datatype="func",
-        sub=f"{sub:03d}",
+        sub=f"{sub_id:03d}",
         task=narrative,
         space="fsaverage6",
-        hemi="L",
-        ext=".func.gii",
+        ext=".h5",
     )
-    boldpath.update(sub=f"{sub:03d}")
-    paths = [boldpath, boldpath.copy().update(hemi="R")]
 
-    confpath = boldpath.copy()
-    del confpath["hemi"]
-    del confpath["space"]
-    confpath.update(desc="confounds", suffix="regressors", ext=".tsv")
+    with h5py.File(boldpath, "r") as f:
+        bold = f["bold"][...]
 
-    confdata = pd.read_csv(confpath, sep="\t", usecols=CONFOUND_REGRESSORS)
-    confdata.bfill(inplace=True)
-
-    masker = subject.GiftiMasker(
-        t_r=TR[narrative],
-        ensure_finite=True,
-        standardize="zscore_sample",
-        standardize_confounds=True,
-    )
-    Y_bold = masker.fit_transform(paths, confounds=confdata.to_numpy())
-
-    Y_bold = Y_bold[NARRATIVE_SLICE[narrative]]
-
-    return Y_bold
+    return bold
 
 
-def build_regressors(narrative: str, modelname: str = None):
-    word_onsets, word_rates = get_transcript_features(narrative)
-    lexical_embs = get_llm_embs(narrative, modelname)
+def build_regressors(narrative: str, modelname: str, **kwargs):
+    word_onsets, word_rates = get_feature("nuisance", narrative)
+    lexical_embs = get_feature(modelname, narrative, **kwargs)
+
+    if True:
+        lexical_embs = np.roll(lexical_embs, shift=len(lexical_embs) // 2, axis=0)
 
     X = np.hstack(
         (
@@ -134,8 +128,8 @@ def build_model(
     feature_names: list[str],
     slices: list[slice],
     alphas: np.ndarray,
-    verbose: int,
     n_jobs: int,
+    verbose: int = 0,
 ):
     """Build the pipeline"""
 
@@ -153,7 +147,10 @@ def build_model(
     column_kernelizer = ColumnKernelizer(kernelizers_tuples, n_jobs=n_jobs)
 
     params = dict(
-        alphas=alphas, progress_bar=verbose, n_iter=100  # , diagonalize_method="svd",
+        alphas=alphas,
+        progress_bar=verbose,
+        n_iter=100,
+        diagonalize_method="svd",
     )
     mkr_model = MultipleKernelRidgeCV(kernels="precomputed", solver_params=params)
     pipeline = make_pipeline(
@@ -162,15 +159,6 @@ def build_model(
     )
 
     return pipeline
-
-
-# def get_average_sub(narrative: str):
-#     # average subject
-#     Y_bold = []
-#     for sub in tqdm(SUBS[narrative], desc="prep"):
-#         Y_bold.append(get_bold(sub, narrative))
-#     Y_bold = np.stack(Y_bold).mean(0)
-#     return Y_bold
 
 
 def get_average_sub(narrative: str):
@@ -186,34 +174,49 @@ def get_sub_bold(narrative: str):
     return Y_bold
 
 
-def main(args):
-    X, features = build_regressors(args.narrative, args.model)
+def encoding(
+    narrative: str,
+    modelname: str,
+    layer: int,
+    alphas: list,
+    jobs: int,
+    group_sub: bool,
+    folds: int,
+    suffix: str,
+    **kwargs,
+):
+    X, features = build_regressors(narrative, modelname, layer=layer)
     feature_names = list(features.keys())
     slices = list(features.values())
 
-    pipeline = build_model(feature_names, slices, args.alphas, args.verbose, args.jobs)
+    pipeline = build_model(feature_names, slices, alphas, jobs)
 
-    narrative2 = "forgot" if args.narrative == "black" else "black"
-    X2, _ = build_regressors(narrative2, args.model)
+    narrative2 = "forgot" if narrative == "black" else "black"
+    X2, _ = build_regressors(narrative2, modelname, layer=layer)
 
-    subs = SUBS[args.narrative]
-    if args.group_sub:
+    atlas = Atlas.schaefer(parcels=1000, networks=17, kong=True)
+
+    subs = SUBS[narrative]
+    if group_sub:
         subs = [0]
 
-    for sub in tqdm(subs):
+    for sub_id in tqdm(subs):
         results = defaultdict(list)
 
-        if args.group_sub:
-            Y_bold = get_average_sub(args.narrative)
+        if group_sub:
+            Y_bold = get_average_sub(narrative)
         else:
-            Y_bold = get_bold(sub, args.narrative)
+            Y_bold = get_bold(sub_id, narrative)
 
         # cross-story
-        if args.folds == 1:
-            if args.group_sub:
+        if folds == 1:
+            if group_sub:
                 Y_bold2 = get_average_sub(narrative2)
             else:
-                Y_bold2 = get_bold(sub, narrative2)
+                Y_bold2 = get_bold(sub_id, narrative2)
+
+            Y_bold = atlas.vox_to_parc(Y_bold)
+            Y_bold2 = atlas.vox_to_parc(Y_bold2)
 
             Y_bold = StandardScaler().fit_transform(Y_bold)
             Y_bold2 = StandardScaler().fit_transform(Y_bold2)
@@ -221,20 +224,20 @@ def main(args):
             pipeline.fit(X, Y_bold)
             Y_preds = pipeline.predict(X2, split=True)
             scores_split = correlation_score_split(Y_bold2, Y_preds)
-            results["actual1"].append(Y_bold2)
-            results["scores1"].append(scores_split.numpy(force=True))
-            results["preds1"].append(Y_preds.numpy(force=True))
+            results[f"{narrative2}_actual"].append(Y_bold2)
+            results[f"{narrative2}_scores"].append(scores_split.numpy(force=True))
+            results[f"{narrative2}_preds"].append(Y_preds.numpy(force=True))
 
             pipeline.fit(X2, Y_bold2)
             Y_preds = pipeline.predict(X, split=True)
             scores_split = correlation_score_split(Y_bold, Y_preds)
-            results["actual2"].append(Y_bold)
-            results["scores2"].append(scores_split.numpy(force=True))
-            results["preds2"].append(Y_preds.numpy(force=True))
+            results[f"{narrative}_actual"].append(Y_bold)
+            results[f"{narrative}_scores"].append(scores_split.numpy(force=True))
+            results[f"{narrative}_preds"].append(Y_preds.numpy(force=True))
 
             result = {k: v[0] for k, v in results.items()}
         else:
-            K = args.folds
+            K = folds
             kfold = KFold(n_splits=K)
             for train_index, test_index in tqdm(kfold.split(X), leave=False, total=K):
                 X_train, X_test = X[train_index], X[test_index]
@@ -255,9 +258,9 @@ def main(args):
 
         # save
         pklpath = Path(
-            root=f"encoding{args.suffix}/{args.narrative}",
-            sub=f"{sub:03d}",
-            datatype=args.model,
+            root=f"results/encoding{suffix}",
+            sub=f"{sub_id:03d}",
+            datatype=modelname,
             ext="h5",
         )
         pklpath.mkdirs()
@@ -266,26 +269,27 @@ def main(args):
                 f.create_dataset(name=key, data=value)
 
 
+def main(*args, **kwargs):
+    if kwargs["device"] == "cuda":
+        set_backend("torch_cuda")
+        print("Set backend to torch cuda")
+    encoding(*args, **kwargs)
+
+
 if __name__ == "__main__":
     from argparse import ArgumentParser
 
     parser = ArgumentParser()
-    parser.add_argument("-m", "--model", type=str, default="model-gemma-2b_layer-16")
+    parser.add_argument("-m", "--modelname", type=str, default="gemma-2b")
+    parser.add_argument("-l", "--layer", type=int, default=16)
     parser.add_argument("-n", "--narrative", type=str, default="black")
     parser.add_argument("-s", "--suffix", type=str, default="")
     parser.add_argument("-j", "--jobs", type=int, default=1)
-    parser.add_argument("--cuda", type=int, default=1)
+    parser.add_argument(
+        "--device", default="cuda" if torch.cuda.is_available() else "cpu"
+    )
     parser.add_argument("-k", "--folds", type=int, default=1)
+    parser.add_argument("--alphas", default=np.logspace(0, 19, 20))
     parser.add_argument("--group-sub", action="store_true")
-    parser.add_argument("-v", "--verbose", action="store_true")
-    args = parser.parse_args()
-    args.alphas = np.logspace(0, 19, 20)
-    print(vars(args))
 
-    if args.cuda > 0:
-        if torch.cuda.is_available():
-            set_backend("torch_cuda")
-        else:
-            print("[WARN] cuda not available")
-
-    main(args)
+    main(**vars(parser.parse_args()))

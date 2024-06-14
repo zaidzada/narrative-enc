@@ -1,3 +1,7 @@
+"""Run confound regression on fMRI-prepped BOLD signal."""
+
+import warnings
+
 import h5py
 import numpy as np
 import pandas as pd
@@ -42,30 +46,35 @@ def get_bold(sub: int, narrative: str) -> np.ndarray:
     return Y_bold
 
 
-def main(narrative: str, **kwargs):
-    for sub in tqdm(SUBS[narrative]):
+def main(narratives: str, **kwargs):
+    for narrative in narratives:
+        for sub_id in tqdm(SUBS[narrative], desc=narrative):
 
-        boldpath = Path(
-            root="derivatives/clean",
-            datatype="func",
-            sub=f"{sub:03d}",
-            task=narrative,
-            space="fsaverage6",
-            ext=".h5",
-        )
-        boldpath.mkdirs()
+            boldpath = Path(
+                root="data/derivatives/clean",
+                datatype="func",
+                sub=f"{sub_id:03d}",
+                task=narrative,
+                space="fsaverage6",
+                ext=".h5",
+            )
+            boldpath.mkdirs()
 
-        Y_bold = get_bold(sub, narrative)
+            Y_bold = get_bold(sub_id, narrative)
 
-        with h5py.File(boldpath, "w") as f:
-            f.create_dataset(name="bold", data=Y_bold)
+            with h5py.File(boldpath, "w") as f:
+                f.create_dataset(name="bold", data=Y_bold)
 
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
 
+    warnings.simplefilter(action="ignore", category=FutureWarning)
+
     parser = ArgumentParser()
-    parser.add_argument("-n", "--narrative", type=str, default="black")
+    parser.add_argument(
+        "-n", "--narratives", type=str, nargs="+", default=["black", "forgot"]
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
 
     main(**vars(parser.parse_args()))

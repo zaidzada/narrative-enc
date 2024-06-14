@@ -1,27 +1,42 @@
-# todo
-- upload to github
-- README
+# model gradients
 
-# choices we're making
-- MRI confound regression -> acompcorr, cosines, 6 head mot (same as narratives)
-- encoding model bands (LLM; word rate, word onset)
-- k-fold split for stories (2-fold within; across-story) -> stick with across-story for now
-- within-subject and group-averaged time series
+to reproduce, run these scripts in order:
 
-- models (LLM; acoustic control?) -> google gemma, b/c 8192 context length (https://huggingface.co/google/gemma-2b)
-- layer of the model -> half or 3/4 of total
+1. `clean.py`
+    1. `groupavg.py`
+1. `transcribe.sh`
+    1. `featuregen.py`
+    1. `embeddings.py`
+        1. `encoding.py`
 
-# preprocessing
-- zscore each fold separately before running
+# slurm
 
-# save
-- actual time series (534, 81k)
-- predicted time series (534, 81k)
-- embeddings with added metrics
-- brain maps of encoding performance
-- hdf5
+## transcribe
+```
+sbatch --job-name=transcribe --time=00:30:00 --mem=5G --gres=gpu:1 --partition=mig --ntasks=1 --cpus-per-task=1 code/slurm.sh \
+whisperx \
+    --model large-v2 \
+    --output_dir data/stimuli/whisperx \
+    --output_format json \
+    --task transcribe \
+    --language en \
+    --device cuda \
+    data/stimuli/audio/*.wav
+```
 
-# exploratory
-- behavioral data
-- other stories? slumlord / reach-for-the-skies
-- contextual effects
+## embeddings
+```
+sbatch --job-name=gen_emb --time=00:30:00 --mem=32G --gres=gpu:1 --partition=mig --ntasks=1 --cpus-per-task=1 code/slurm.sh \
+code/embeddings.py
+```
+
+## encoding
+models are: acoustic, articulatory, syntactic, gemma-2b
+```
+sbatch --job-name=enc --time=01:10:00 --gres=gpu:1 --partition=mig --ntasks=1 --cpus-per-task=1 code/slurm.sh -- code/encoding.py -m gemma-2b --suffix _shifted
+```
+
+# commands
+```
+rsync -av results zzada@scotty.pni.princeton.edu:/jukebox/hasson/zaid/narrative-enc/ 
+```

@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-#SBATCH --time=01:00:00          # total run time limit (HH:MM:SS)
-#SBATCH -o 'logs/%A.log'
+#SBATCH -o 'logs/%A-%x.log'
 
 source /usr/share/Modules/init/bash
-module load anacondapy/2023.07-cuda
-conda activate fconv2
+module load anaconda3/2024.2
+conda activate fconv
 
-echo "${CONDA_PROMPT_MODIFIER}Encoding"
+echo "${CONDA_PROMPT_MODIFIER}Job: $SLURM_JOB_NAME"
 echo "${CONDA_PROMPT_MODIFIER}Requester: $USER"
 echo "${CONDA_PROMPT_MODIFIER}Node: $HOSTNAME"
 echo "${CONDA_PROMPT_MODIFIER}SLURM_ARRAY_JOB_ID: $SLURM_ARRAY_JOB_ID"
