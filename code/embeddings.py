@@ -1,6 +1,4 @@
-"""Generate embedding for a transcript.
-
-uses 18G and < 10 min for two stories on A100
+"""Generate embedding for a word-aligned transcript.
 """
 
 import json
@@ -15,6 +13,9 @@ from util.path import Path
 # short names for long model names
 HFMODELS = {
     "gemma-2b": "google/gemma-2b",
+    "gemma2-9b": "google/gemma-2-9b",
+    "gemma2-27b": "google/gemma-2-27b",
+    "llama3-8b": "meta-llama/Meta-Llama-3-8B",
 }
 
 
@@ -26,7 +27,12 @@ def main(narratives: list[str], modelname: str, device: str):
     tokenizer_args = dict(token="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")
     if "gpt2" in hfmodelname or "opt" in hfmodelname:
         tokenizer_args["add_prefix_space"] = True
-    model_args = dict(token="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")
+    model_args = dict(
+        token="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",
+        # torch_dtype=torch.bfloat16,
+        # attn_implementation="flash_attention_2",
+        device_map="auto",
+    )
 
     # Load model
     print("Loading model...")
@@ -41,7 +47,7 @@ def main(narratives: list[str], modelname: str, device: str):
         f"\nDevice: {device}"
     )
     model = model.eval()
-    model = model.to(device)
+    # model = model.to(device)
 
     epath = Path(
         root="data/features",
@@ -71,7 +77,8 @@ def main(narratives: list[str], modelname: str, device: str):
 
         # Set up input
         tokenids = [tokenizer.bos_token_id] + df.token_id.tolist()
-        batch = torch.tensor([tokenids], dtype=torch.long, device=device)
+        # batch = torch.tensor([tokenids], dtype=torch.long, device=device)
+        batch = torch.tensor([tokenids], dtype=torch.long).to("cuda")
 
         # Run through model
         with torch.no_grad():

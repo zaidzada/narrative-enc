@@ -105,6 +105,7 @@ def build_regressors(narrative: str, modelname: str, **kwargs):
     word_onsets, word_rates = get_feature("nuisance", narrative)
     lexical_embs = get_feature(modelname, narrative, **kwargs)
 
+    # shift
     # if True:
     #     lexical_embs = np.roll(lexical_embs, shift=len(lexical_embs) // 2, axis=0)
 
@@ -260,7 +261,7 @@ def encoding(
         pklpath = Path(
             root=f"results/encoding{suffix}",
             sub=f"{sub_id:03d}",
-            datatype=modelname,
+            datatype=modelname + f"_{layer}-layer",
             ext="h5",
         )
         pklpath.mkdirs()

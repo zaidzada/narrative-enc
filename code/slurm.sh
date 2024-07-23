@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+#SBATCH --nodes=1                # node count
+#SBATCH --ntasks=1               # total number of tasks across all nodes
+#SBATCH --cpus-per-task=1        # cpu-cores per task (>1 if multi-threaded tasks)
 #SBATCH -o 'logs/%A-%x.log'
 
 source /usr/share/Modules/init/bash
