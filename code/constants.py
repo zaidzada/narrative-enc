@@ -13,31 +13,10 @@ NARRATIVE_SLICE = {
 # PUNCTUATION = "!\"#$%&'()*+,-./:;<=>?@\\^_`{|}~"  # string.punctuation without [ ]
 PUNCTUATION = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 
-
-CONFOUND_REGRESSORS = [
-    "a_comp_cor_00",
-    "a_comp_cor_01",
-    "a_comp_cor_02",
-    "a_comp_cor_03",
-    "a_comp_cor_04",
-    "cosine00",
-    "cosine01",
-    "cosine02",
-    "cosine03",
-    "cosine04",
-    "cosine05",
-    "cosine06",
-    "cosine07",
-    "cosine08",
-    "cosine09",
-    "cosine10",
-    "trans_x",
-    "trans_y",
-    "trans_z",
-    "rot_x",
-    "rot_y",
-    "rot_z",
-]
+CONFOUND_MODEL = {
+    "confounds": ["trans_x", "trans_y", "trans_z", "rot_x", "rot_y", "rot_z", "cosine"],
+    "aCompCor": [{"n_comps": 5, "tissue": "CSF"}, {"n_comps": 5, "tissue": "WM"}],
+}
 
 SUBS = {
     "black": [

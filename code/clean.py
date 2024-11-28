@@ -4,8 +4,8 @@ import warnings
 
 import h5py
 import numpy as np
-import pandas as pd
-from constants import CONFOUND_REGRESSORS, NARRATIVE_SLICE, SUBS, TR
+from constants import CONFOUND_MODEL, NARRATIVE_SLICE, SUBS, TR
+from extract_confounds import extract_confounds, load_confounds
 from tqdm import tqdm
 from util import subject
 from util.path import Path
@@ -29,17 +29,18 @@ def get_bold(sub: int, narrative: str) -> np.ndarray:
     del confpath["space"]
     confpath.update(desc="confounds", suffix="regressors", ext=".tsv")
 
-    # TODO make these arguments?
-    confdata = pd.read_csv(confpath, sep="\t", usecols=CONFOUND_REGRESSORS)
-    confdata.bfill(inplace=True)
+    confounds_fn = confpath.fpath
+    confounds_df, confounds_meta = load_confounds(confounds_fn)
+    confounds = extract_confounds(confounds_df, confounds_meta, CONFOUND_MODEL)
 
     masker = subject.GiftiMasker(
         t_r=TR[narrative],
+        detrend=True,
         ensure_finite=True,
         standardize="zscore_sample",
         standardize_confounds=True,
     )
-    Y_bold = masker.fit_transform(paths, confounds=confdata.to_numpy())
+    Y_bold = masker.fit_transform(paths, confounds=confounds)
 
     Y_bold = Y_bold[NARRATIVE_SLICE[narrative]]
 
