@@ -222,6 +222,7 @@ def encoding(
             Y_bold = StandardScaler().fit_transform(Y_bold)
             Y_bold2 = StandardScaler().fit_transform(Y_bold2)
 
+            # fit one first story
             pipeline.fit(X, Y_bold)
             Y_preds = pipeline.predict(X2, split=True)
             scores_split = correlation_score_split(Y_bold2, Y_preds)
@@ -229,12 +230,27 @@ def encoding(
             results[f"{narrative2}_scores"].append(scores_split.numpy(force=True))
             results[f"{narrative2}_preds"].append(Y_preds.numpy(force=True))
 
+            Xfit = pipeline["columnkernelizer"].get_X_fit()
+            weights = pipeline["multiplekernelridgecv"].get_primal_coef(Xfit)
+            weights_embs = weights[-1]  # take second band weights
+            weights_embs_delay = weights_embs.reshape(-1, 4, weights_embs.shape[-1])
+            weights_embs = weights_embs_delay.mean(1)
+            results[f"{narrative2}_weights"].append(weights_embs)
+
+            # fit one second story
             pipeline.fit(X2, Y_bold2)
             Y_preds = pipeline.predict(X, split=True)
             scores_split = correlation_score_split(Y_bold, Y_preds)
             results[f"{narrative}_actual"].append(Y_bold)
             results[f"{narrative}_scores"].append(scores_split.numpy(force=True))
             results[f"{narrative}_preds"].append(Y_preds.numpy(force=True))
+
+            Xfit = pipeline["columnkernelizer"].get_X_fit()
+            weights = pipeline["multiplekernelridgecv"].get_primal_coef(Xfit)
+            weights_embs = weights[-1]
+            weights_embs_delay = weights_embs.reshape(-1, 4, weights_embs.shape[-1])
+            weights_embs = weights_embs_delay.mean(1)
+            results[f"{narrative}_weights"].append(weights_embs)
 
             result = {k: v[0] for k, v in results.items()}
         else:
@@ -281,8 +297,8 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
 
     parser = ArgumentParser()
-    parser.add_argument("-m", "--modelname", type=str, default="gemma-2b")
-    parser.add_argument("-l", "--layer", type=int, default=16)
+    parser.add_argument("-m", "--modelname", type=str, default="gemma2-9b")
+    parser.add_argument("-l", "--layer", type=int, default=22)
     parser.add_argument("-n", "--narrative", type=str, default="black")
     parser.add_argument("-s", "--suffix", type=str, default="")
     parser.add_argument("-j", "--jobs", type=int, default=1)
