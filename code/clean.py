@@ -4,11 +4,28 @@ import warnings
 
 import h5py
 import numpy as np
-from constants import CONFOUND_MODEL, NARRATIVE_SLICE, SUBS, TR
+import pandas as pd
+from constants import CONFOUND_MODEL, NARRATIVE_SLICE, SUBS, TR, TRS
 from extract_confounds import extract_confounds, load_confounds
 from tqdm import tqdm
 from util import subject
 from util.path import Path
+
+
+def get_nuisance_regressors(narrative: str):
+
+    filename = f"data/stimuli/whisperx/narrative-{narrative}.csv"
+    df = pd.read_csv(filename, index_col=0)
+
+    word_onsets = np.zeros(TRS[narrative], dtype=np.float32)
+    word_rates = np.zeros(TRS[narrative], dtype=np.float32)
+    for tr in range(TRS[narrative]):
+        subdf = df[df.TR == tr]
+        if len(subdf):
+            word_onsets[tr] = 1
+            word_rates[tr] = len(subdf)
+
+    return word_onsets, word_rates
 
 
 def get_bold(sub: int, narrative: str) -> np.ndarray:
@@ -33,6 +50,13 @@ def get_bold(sub: int, narrative: str) -> np.ndarray:
     confounds_df, confounds_meta = load_confounds(confounds_fn)
     confounds = extract_confounds(confounds_df, confounds_meta, CONFOUND_MODEL)
 
+    word_onsets, word_rates = get_nuisance_regressors(narrative)
+    task_confounds = np.zeros((len(confounds), 2))
+    task_confounds[NARRATIVE_SLICE[narrative], 0] = word_onsets
+    task_confounds[NARRATIVE_SLICE[narrative], 1] = word_rates
+
+    all_confounds = np.hstack((confounds.to_numpy(), task_confounds))
+
     masker = subject.GiftiMasker(
         t_r=TR[narrative],
         detrend=True,
@@ -40,7 +64,7 @@ def get_bold(sub: int, narrative: str) -> np.ndarray:
         standardize="zscore_sample",
         standardize_confounds=True,
     )
-    Y_bold = masker.fit_transform(paths, confounds=confounds)
+    Y_bold = masker.fit_transform(paths, confounds=all_confounds)
 
     Y_bold = Y_bold[NARRATIVE_SLICE[narrative]]
 

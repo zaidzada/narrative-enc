@@ -80,7 +80,7 @@ def get_bold(sub_id: int, narrative: str) -> np.ndarray:
 
 
 def build_regressors(narrative: str, modelname: str, **kwargs):
-    word_onsets, word_rates = get_nuisance_regressors(narrative)
+    # word_onsets, word_rates = get_nuisance_regressors(narrative)
     conv_embs = _get_llm_embs(
         narrative, modelname=modelname, suffix="_conv", layer=None
     )
@@ -91,8 +91,8 @@ def build_regressors(narrative: str, modelname: str, **kwargs):
 
     X = np.hstack(
         (
-            word_onsets.reshape(-1, 1),
-            word_rates.reshape(-1, 1),
+            # word_onsets.reshape(-1, 1),
+            # word_rates.reshape(-1, 1),
             conv_embs,
             enc_embs,
             dec_embs,
@@ -100,9 +100,9 @@ def build_regressors(narrative: str, modelname: str, **kwargs):
     )
 
     slices = {}
-    slices["nuisance"] = slice(0, 2)
+    # slices["nuisance"] = slice(0, 2)
 
-    start = slices["nuisance"].stop
+    start = 0  # slices["nuisance"].stop
     end = start + conv_embs.shape[1]
     slices["acoustic"] = slice(start, end)
 
@@ -227,7 +227,7 @@ def encoding(
         pklpath = Path(
             root=f"results/encoding{suffix}",
             sub=f"{sub_id:03d}",
-            datatype=modelname + f"_{layer}-layer",
+            datatype=modelname + f"_layer-{layer}",
             ext="h5",
         )
         pklpath.mkdirs()

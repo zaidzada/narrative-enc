@@ -35,11 +35,11 @@ transcribe:
 # WHISPER
 whisper:
 	sbatch --job-name=enc --mem=8G --time=00:15:00 --gres=gpu:1 code/slurm.sh -- \
-		code/whisper.py -m whisper-large
+		code/whisper.py -m whisper-medium
 
 whisper_encoding:
 	sbatch --job-name=enc --mem=8G --time=00:30:00 --gres=gpu:1 code/slurm.sh -- \
-		code/whisper_encoding.py -m whisper-large -l 26
+		code/whisper_encoding.py -m whisper-medium -l 20
 
 # OLD:
 joint_encoding:
