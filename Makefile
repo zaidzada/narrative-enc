@@ -64,4 +64,5 @@ backup:
 	rsync -av results zzada@scotty.pni.princeton.edu:/jukebox/hasson/zaid/narrative-enc/ 
 
 from_scotty:
-	rsync -av --include="*/" --include="*task-black_desc-confounds_regressors.json" --exclude="*" data/derivatives/fmriprep della-vis2.princeton.edu:/scratch/gpfs/zzada/narrative-gradients/data/derivatives
+	# this is run from scotty under /jukebox/hasson/snastase/narratives
+	# rsync -av --include="*/" --include="*task-black_desc-confounds_regressors.json" --exclude="*" data/derivatives/fmriprep della-vis2.princeton.edu:/scratch/gpfs/zzada/narrative-gradients/data/derivatives
